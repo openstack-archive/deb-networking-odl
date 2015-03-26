@@ -1,0 +1,5 @@
+networking-odl (2015.1.1~git20150326+64a131378a-1) experimental; urgency=medium
+
+  * Initial release. (Closes: #XXXXXX)
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 26 Mar 2015 10:34:21 +0100

@@ -1,0 +1,49 @@
+Source: networking-odl
+Section: net
+Priority: optional
+Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
+Uploaders: Thomas Goirand <zigo@debian.org>
+Build-Depends: debhelper (>= 9),
+               dh-python,
+               dh-systemd,
+               openstack-pkg-tools (>= 22~),
+               po-debconf,
+               python-all (>= 2.6),
+               python-pbr (>= 0.6),
+               python-sphinx (>= 1.2.1)
+Build-Depends-Indep: python-babel (>= 1.3),
+                     python-coverage (>= 3.6),
+                     python-hacking,
+                     python-neutron (>= 2015.1~b3),
+                     python-neutron-fwaas,
+                     python-neutron-lbaas,
+                     python-oslosphinx,
+                     python-oslotest (>= 1.2.0),
+                     python-testscenarios (>= 0.4),
+                     python-testtools (>= 0.9.34),
+                     python-webtest (>= 2.0),
+                     subunit,
+                     testrepository (>= 0.0.18)
+Standards-Version: 3.9.6
+Homepage: https://github.com/stackforge/networking-odl
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/networking-odl.git;a=summary
+Vcs-Git: git://anonscm.debian.org/openstack/networking-odl.git
+
+Package: python-networking-odl
+Architecture: all
+Section: python
+Pre-Depends: dpkg (>= 1.15.6~)
+Depends: python-babel (>= 1.3),
+         python-neutron,
+         python-pbr,
+         ${misc:Depends},
+         ${python:Depends}
+Recommends: iputils-arping
+Description: OpenStack virtual network service - OpenDaylight plugin
+ Neutron provides an API to dynamically request and configure virtual networks.
+ These networks connect "interfaces" from other OpenStack services (such as
+ vNICs from Nova VMs). The Neutron API supports extensions to provide advanced
+ network capabilities, including QoS, ACLs, and network monitoring.
+ .
+ This package provides the Python files for the OpenDaylight ML2
+ MechanismDriver plugin.
