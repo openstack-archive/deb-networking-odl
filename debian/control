@@ -1,5 +1,5 @@
 Source: networking-odl
-Section: net
+Section: python
 Priority: optional
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
 XSBC-Original-Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>

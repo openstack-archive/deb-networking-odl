@@ -25,9 +25,9 @@ from networking_odl.common import config  # noqa
 LOG = logging.getLogger(__name__)
 
 
-class OpenDaylightLbaasDriver(abstract_driver.LoadBalancerAbstractDriver):
+class OpenDaylightLbaasDriverV1(abstract_driver.LoadBalancerAbstractDriver):
 
-    """OpenDaylight LBaaS Driver
+    """OpenDaylight LBaaS Driver for the V1 API
 
     This code is the backend implementation for the OpenDaylight
     LBaaS V1 driver for Openstack Neutron.
@@ -40,8 +40,7 @@ class OpenDaylightLbaasDriver(abstract_driver.LoadBalancerAbstractDriver):
             cfg.CONF.ml2_odl.url,
             cfg.CONF.ml2_odl.username,
             cfg.CONF.ml2_odl.password,
-            cfg.CONF.ml2_odl.timeout,
-            cfg.CONF.ml2_odl.session_timeout
+            cfg.CONF.ml2_odl.timeout
         )
 
     def create_vip(self, context, vip):
