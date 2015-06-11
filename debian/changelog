@@ -1,5 +1,5 @@
-networking-odl (2015.1.1~git20150326+64a131378a-1) experimental; urgency=medium
+networking-odl (2015.1.1-0ubuntu1) wily; urgency=medium
 
-  * Initial release. (Closes: #XXXXXX)
+  * Initial release.
 
- -- Thomas Goirand <zigo@debian.org>  Thu, 26 Mar 2015 10:34:21 +0100
+ -- James Page <james.page@ubuntu.com>  Thu, 11 Jun 2015 11:43:30 +0100

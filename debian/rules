@@ -1,21 +1,27 @@
 #!/usr/bin/make -f
 
-UPSTREAM_GIT := git://github.com/stackforge/networking-odl.git
-include /usr/share/openstack-pkg-tools/pkgos.make
+PYTHONS:=$(shell pyversions -vr)
 
+UPSTREAM_GIT = git://github.com/stackforge/networking-odl.git
+include /usr/share/openstack-pkg-tools/pkgos.make
 export OSLO_PACKAGE_VERSION=$(VERSION)
 
 %:
-	dh $@ --buildsystem=python_distutils --with python2
+	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
 
 override_dh_install:
-	dh_install -O--buildsystem=python_distutils
-	mv $(CURDIR)/debian/python-networking-odl/usr/etc $(CURDIR)/debian/python-networking-odl
+	set -e ; for pyvers in $(PYTHONS); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python-networking-odl; \
+	done
+	rm -rf $(CURDIR)/debian/python*-networking-odl/usr/lib/python*/dist-packages/*.pth
+	rm -rf $(CURDIR)/debian/python*-networking-odl/usr/etc
+	dh_install
 
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
-	@echo "===> Running tests"
-	set -e ; set -x ; for i in 2.7 ; do \
+	echo "===> Running tests"
+	set -ex ; for i in $(PYTHONS) ; do \
 		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
 		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
 		rm -rf .testrepository ; \
@@ -28,6 +34,10 @@ ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 	done
 endif
 
+override_dh_sphinxdoc:
+	sphinx-build -b html doc/source debian/python-networking-odl-doc/usr/share/doc/python-networking-odl-doc/html
+	dh_sphinxdoc -O--buildsystem=python_distutils
+
 override_dh_clean:
 	dh_clean -O--buildsystem=python_distutils
 	rm -rf build
@@ -38,4 +48,6 @@ override_dh_installemacsen override_dh_installifupdown:
 override_dh_installinfo override_dh_installmenu override_dh_installmime:
 override_dh_installmodules override_dh_installlogcheck:
 override_dh_installpam override_dh_installppp override_dh_installudev override_dh_installwm:
-override_dh_installxfonts override_dh_gconf override_dh_icons override_dh_installgsettings:
+override_dh_installxfonts override_dh_gconf override_dh_icons override_dh_perl override_dh_usrlocal:
+override_dh_installcron override_dh_installdebconf:
+override_dh_installlogrotate override_dh_installgsettings:

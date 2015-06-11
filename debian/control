@@ -1,49 +1,61 @@
 Source: networking-odl
 Section: net
 Priority: optional
-Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
 Uploaders: Thomas Goirand <zigo@debian.org>
 Build-Depends: debhelper (>= 9),
                dh-python,
-               dh-systemd,
-               openstack-pkg-tools (>= 22~),
-               po-debconf,
-               python-all (>= 2.6),
-               python-pbr (>= 0.6),
-               python-sphinx (>= 1.2.1)
+               openstack-pkg-tools,
+               python-all (>= 2.6.6-3~),
+               python-setuptools,
+               python-sphinx,
 Build-Depends-Indep: python-babel (>= 1.3),
-                     python-coverage (>= 3.6),
-                     python-hacking,
-                     python-neutron (>= 2015.1~b3),
-                     python-neutron-fwaas,
-                     python-neutron-lbaas,
+                     python-hacking (>= 0.10.0),
+                     python-neutron (>= 1:2015.1.0),
+                     python-neutron-fwaas (>= 2015.1.0),
+                     python-neutron-lbaas (>= 1:2015.1.0),
                      python-oslosphinx,
                      python-oslotest (>= 1.2.0),
+                     python-subunit (>= 0.0.18),
                      python-testscenarios (>= 0.4),
-                     python-testtools (>= 0.9.34),
+                     python-testtools (>= 0.9.36),
                      python-webtest (>= 2.0),
-                     subunit,
                      testrepository (>= 0.0.18)
 Standards-Version: 3.9.6
-Homepage: https://github.com/stackforge/networking-odl
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/networking-odl.git;a=summary
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/networking-odl.git
 Vcs-Git: git://anonscm.debian.org/openstack/networking-odl.git
+Homepage: https://github.com/stackforge/networking-odl
 
 Package: python-networking-odl
 Architecture: all
-Section: python
-Pre-Depends: dpkg (>= 1.15.6~)
-Depends: python-babel (>= 1.3),
-         python-neutron,
-         python-pbr,
-         ${misc:Depends},
-         ${python:Depends}
-Recommends: iputils-arping
-Description: OpenStack virtual network service - OpenDaylight plugin
- Neutron provides an API to dynamically request and configure virtual networks.
- These networks connect "interfaces" from other OpenStack services (such as
- vNICs from Nova VMs). The Neutron API supports extensions to provide advanced
- network capabilities, including QoS, ACLs, and network monitoring.
+Depends: python-neutron (>= 1:2015.1.0), ${misc:Depends}, ${python:Depends}
+Suggests: python-networking-odl-doc
+Description: OpenStack Networking OpenDayLight ML2 mechanism driver
+ Neutron is a virtual network service for Openstack, and a part of
+ Netstack. Just like OpenStack Nova provides an API to dynamically
+ request and configure virtual servers, Neutron provides an API to
+ dynamically request and configure virtual networks. These networks
+ connect "interfaces" from other OpenStack services (e.g., virtual NICs
+ from Nova VMs). The Neutron API supports extensions to provide
+ advanced network capabilities (e.g., QoS, ACLs, network monitoring,
+ etc.)
  .
- This package provides the Python files for the OpenDaylight ML2
- MechanismDriver plugin.
+ This package provides the OpenDayLight mechanism driver for Neutron.
+
+Package: python-networking-odl-doc
+Section: doc
+Architecture: all
+Depends: ${misc:Depends}, ${sphinxdoc:Depends}
+Description: OpenStack logging configuration library - doc
+ Neutron is a virtual network service for Openstack, and a part of
+ Netstack. Just like OpenStack Nova provides an API to dynamically
+ request and configure virtual servers, Neutron provides an API to
+ dynamically request and configure virtual networks. These networks
+ connect "interfaces" from other OpenStack services (e.g., virtual NICs
+ from Nova VMs). The Neutron API supports extensions to provide
+ advanced network capabilities (e.g., QoS, ACLs, network monitoring,
+ etc.)
+ .
+ This package contains the documentation for the OpenDayLight
+ mechanism driver for Neutron.

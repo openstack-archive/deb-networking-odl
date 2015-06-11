@@ -1,0 +1,9 @@
+Document: python-networking-odl-doc
+Title: Neutron OpenDayLight ML2 mechanism driver documentation
+Author: N/A
+Abstract: Sphinx documentation for networking-odl
+Section: Programming/Python
+
+Format: HTML
+Index: /usr/share/doc/python-networking-odl-doc/html/index.html
+Files: /usr/share/doc/python-networking-odl-doc/html/*
