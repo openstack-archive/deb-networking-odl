@@ -47,7 +47,7 @@ Package: python-networking-odl-doc
 Section: doc
 Architecture: all
 Depends: ${misc:Depends}, ${sphinxdoc:Depends}
-Description: OpenStack logging configuration library - doc
+Description: OpenStack Networking OpenDayLight ML2 mechanism driver - doc
  Neutron is a virtual network service for Openstack, and a part of
  Netstack. Just like OpenStack Nova provides an API to dynamically
  request and configure virtual servers, Neutron provides an API to
