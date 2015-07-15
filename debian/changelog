@@ -1,9 +1,9 @@
-networking-odl (1:1.0.0~b1~git20150715.47686c2-0ubuntu1) UNRELEASED; urgency=medium
+networking-odl (1:1.0.0~b1~git20150715.47686c2-0ubuntu1) wily; urgency=medium
 
   * New upstream snapshot for OpenStack Liberty.
   * Align (Build-)Depends with upstream.
 
- -- James Page <james.page@ubuntu.com>  Wed, 15 Jul 2015 09:43:39 +0100
+ -- James Page <james.page@ubuntu.com>  Wed, 15 Jul 2015 10:00:47 +0100
 
 networking-odl (2015.1.1-0ubuntu1) wily; urgency=medium
 
