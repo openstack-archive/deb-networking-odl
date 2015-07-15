@@ -27,76 +27,40 @@
 XTRACE=$(set +o | grep xtrace)
 set +o xtrace
 
+# OpenDaylight directories
+NETWORKING_ODL_DIR=$DEST/networking-odl
+ODL_DIR=$DEST/opendaylight
+
+# Make sure $ODL_DIR exists
+mkdir -p $ODL_DIR
+
+# Import common functions
+source $TOP_DIR/functions
 
 # For OVS_BRIDGE and PUBLIC_BRIDGE
 source $TOP_DIR/lib/neutron_plugins/ovs_base
 
-# Defaults
-# --------
+# Source global ODL settings
+source $NETWORKING_ODL_DIR/devstack/settings.odl
 
-# The IP address of ODL. Set this in local.conf.
-# ODL_MGR_IP=
-ODL_MGR_IP=${ODL_MGR_IP:-$SERVICE_HOST}
+# Source specicic ODL release settings
+function odl_update_maven_metadata_xml {
+    local MAVENMETAFILE=$1
+    local NEXUSPATH=$2
+    local BUNDLEVERSION=$3
 
-# The default ODL port for Tomcat to use
-# NOTE: We make this configurable because by default, ODL uses port 8080 for
-# Tomcat (Helium releases) or Jetty (Lithium and later releases), and this
-# conflicts with swift which also uses port 8080.
-ODL_PORT=${ODL_PORT:-8087}
+    if [[ "$OFFLINE" == "True" ]]; then
+        return
+    fi
 
-# The ODL endpoint URL
-ODL_ENDPOINT=${ODL_ENDPOINT:-http://${ODL_MGR_IP}:${ODL_PORT}/controller/nb/v2/neutron}
+    # Remove stale MAVENMETAFILE for cases where you switch releases
+    rm -f $MAVENMETAFILE
 
-# The ODL username
-ODL_USERNAME=${ODL_USERNAME:-admin}
+    # Acquire the timestamp information from maven-metadata.xml
+    wget -O $MAVENMETAFILE ${NEXUSPATH}/${BUNDLEVERSION}/maven-metadata.xml
+}
 
-# The ODL password
-ODL_PASSWORD=${ODL_PASSWORD:-admin}
-
-# <define global variables here that belong to this project>
-ODL_DIR=$DEST/opendaylight
-
-# The OpenDaylight URL PREFIX
-# Note: this is only used when ODL_URL is not provided
-ODL_URL_PREFIX=${ODL_URL_PREFIX:-https://nexus.opendaylight.org}
-
-# The OpenDaylight URL
-ODL_URL=${ODL_URL:-${ODL_URL_PREFIX}/content/repositories/public/org/opendaylight/integration/distribution-karaf/0.2.3-Helium-SR3}
-
-# Short name of ODL package
-ODL_NAME=${ODL_NAME:-distribution-karaf-0.2.3-Helium-SR3}
-
-# The OpenDaylight Package, currently using 'Helium' release
-ODL_PKG=${ODL_PKG:-distribution-karaf-0.2.3-Helium-SR3.zip}
-
-# The OpenDaylight Networking-ODL DIR
-ODL_NETWORKING_DIR=$DEST/networking-odl
-
-# How long (in seconds) to pause after ODL starts to let it complete booting
-ODL_BOOT_WAIT=${ODL_BOOT_WAIT:-90}
-
-# The physical provider network to device mapping
-ODL_PROVIDER_MAPPINGS=${ODL_PROVIDER_MAPPINGS:-physnet1:eth1}
-
-# Enable OpenDaylight l3 forwarding
-ODL_L3=${ODL_L3:-False}
-
-# Enable debug logs for odl ovsdb
-ODL_NETVIRT_DEBUG_LOGS=${ODL_NETVIRT_DEBUG_LOGS:-False}
-
-# Karaf logfile information
-ODL_KARAF_LOG_NAME=${ODL_KARAF_LOG_NAME:-q-odl-karaf.log}
-
-# The logging config file in ODL
-ODL_LOGGING_CONFIG=${ODL_LOGGING_CONFIG:-${ODL_DIR}/${ODL_NAME}/etc/org.ops4j.pax.logging.cfg}
-
-# The bridge to configure
-OVS_BR=${OVS_BR:-br-int}
-
-# Allow the min/max/perm Java memory to be configurable
-ODL_JAVA_MIN_MEM=${ODL_JAVA_MIN_MEM:-96m}
-ODL_JAVA_MAX_MEM=${ODL_JAVA_MAX_MEM:-256m}
-ODL_JAVA_MAX_PERM_MEM=${ODL_JAVA_MAX_PERM_MEM:-256m}
+source $NETWORKING_ODL_DIR/devstack/odl-releases/$ODL_RELEASE
 
 # Entry Points
 # ------------
@@ -121,17 +85,16 @@ function configure_opendaylight {
     sudo ovs-vsctl --no-wait -- --may-exist add-br $OVS_BR
     sudo ovs-vsctl --no-wait br-set-external-id $OVS_BR bridge-id $OVS_BR
 
-    # Determine the version of ODL we're running. Needed below
-    # Get the MAJOR.MINOR version
-    local ODL_VERSION=$(echo $ODL_NAME | cut -d '-' -f 3 | cut -d '.' -f 1,2)
+    # The logging config file in ODL
+    local ODL_LOGGING_CONFIG=${ODL_DIR}/${ODL_NAME}/etc/org.ops4j.pax.logging.cfg
 
-    # Add odl-ovsdb-openstack if it's not already there
-    local ODLOVSDB=$(cat $ODL_DIR/$ODL_NAME/etc/org.apache.karaf.features.cfg | grep featuresBoot= | grep odl)
-    if [ "$ODLOVSDB" == "" ]; then
-        sed -i '/^featuresBoot=/ s/$/,odl-ovsdb-openstack/' $ODL_DIR/$ODL_NAME/etc/org.apache.karaf.features.cfg
+    # Add netvirt feature in Karaf, if it's not already there
+    local ODLFEATUREMATCH=$(cat $ODL_DIR/$ODL_NAME/etc/org.apache.karaf.features.cfg | grep featuresBoot= | grep $ODL_NETVIRT_KARAF_FEATURE)
+    if [ "$ODLFEATUREMATCH" == "" ]; then
+        sed -i "/^featuresBoot=/ s/$/,$ODL_NETVIRT_KARAF_FEATURE/" $ODL_DIR/$ODL_NAME/etc/org.apache.karaf.features.cfg
     fi
 
-    if [ "$ODL_VERSION" == "0.2" ]; then
+    if [[ "$ODL_RELEASE" =~ "helium" ]]; then
         # Move Tomcat to $ODL_PORT
         local _ODLPORT=$(cat $ODL_DIR/$ODL_NAME/configuration/tomcat-server.xml | grep $ODL_PORT)
         if [ "$_ODLPORT" == "" ]; then
@@ -154,12 +117,14 @@ function configure_opendaylight {
         fi
     fi
 
+    # Remove existing logfiles
+    rm -f "/opt/stack/logs/$ODL_KARAF_LOG_BASE*"
     # Log karaf output to a file
-    _LF=$DEST/logs/$ODL_KARAF_LOG_NAME
+    _LF=/opt/stack/logs/$ODL_KARAF_LOG_NAME
     LF=$(echo $_LF | sed 's/\//\\\//g')
+    # Soft link for easy consumption
+    ln -sf $_LF "/opt/stack/logs/screen-karaf.txt"
 
-    # Remove the existing logfile
-    rm -f $_LF*
     # Change the karaf logfile
     sed -i "/^log4j\.appender\.out\.file/ s/.*/log4j\.appender\.out\.file\=$LF/" \
     $ODL_DIR/$ODL_NAME/etc/org.ops4j.pax.logging.cfg
@@ -174,17 +139,19 @@ function configure_opendaylight {
             echo 'log4j.logger.org.opendaylight.ovsdb.openstack.netvirt.impl.TenantNetworkManagerImpl = DEBUG, out' >> $ODL_LOGGING_CONFIG
             echo 'log4j.logger.org.opendaylight.ovsdb.plugin.md.OvsdbInventoryManager = INFO, out' >> $ODL_LOGGING_CONFIG
         fi
-        if [ "$ODL_VERSION" == "0.2" ]; then
+        if [[ "$ODL_RELEASE" =~ "helium" ]]; then
             local ODL_NEUTRON_DEBUG_LOGS=$(cat $ODL_LOGGING_CONFIG | grep ^log4j.logger.org.opendaylight.controller.networkconfig.neutron)
             if [ "${ODL_NEUTRON_DEBUG_LOGS}" == "" ]; then
-		echo 'log4j.logger.org.opendaylight.controller.networkconfig.neutron = TRACE, out' >> $ODL_LOGGING_CONFIG
+                echo 'log4j.logger.org.opendaylight.controller.networkconfig.neutron = TRACE, out' >> $ODL_LOGGING_CONFIG
             fi
         else
             local ODL_NEUTRON_DEBUG_LOGS=$(cat $ODL_LOGGING_CONFIG | grep ^log4j.logger.org.opendaylight.neutron)
             if [ "${ODL_NEUTRON_DEBUG_LOGS}" == "" ]; then
-		echo 'log4j.logger.org.opendaylight.neutron = TRACE, out' >> $ODL_LOGGING_CONFIG
+                echo 'log4j.logger.org.opendaylight.neutron = TRACE, out' >> $ODL_LOGGING_CONFIG
             fi
         fi
+        # Bump up how man logfiles we save after rotation if debug is turned on
+        sed -i "/^log4j.appender.out.maxBackupIndex=/ s/10/$ODL_LOGFILES_TO_SAVE/" $ODL_LOGGING_CONFIG
     fi
 }
 
@@ -204,7 +171,6 @@ function init_opendaylight {
 
 # install_opendaylight() - Collect source and prepare
 function install_opendaylight {
-    local _pwd=$(pwd)
     echo "Installing OpenDaylight and dependent packages"
 
     if is_ubuntu; then
@@ -216,14 +182,16 @@ function install_opendaylight {
     install_opendaylight_neutron_thin_ml2_driver
 
     # Download OpenDaylight
-    mkdir -p $ODL_DIR
     cd $ODL_DIR
-    wget -N $ODL_URL/$ODL_PKG
-    unzip -u $ODL_PKG
+
+    if [[ "$OFFLINE" != "True" ]]; then
+	wget -N $ODL_URL/$ODL_PKG
+    fi
+    unzip -u -o $ODL_PKG
 }
 
 function install_opendaylight_neutron_thin_ml2_driver {
-    cd $ODL_NETWORKING_DIR
+    cd $NETWORKING_ODL_DIR
     echo "Installing the Networking-ODL driver for OpenDaylight"
     sudo python setup.py install
 }
@@ -255,11 +223,6 @@ function start_opendaylight {
     export JAVA_MAX_PERM_MEM=$ODL_JAVA_MAX_PERM_MEM
     run_process odl-server "$ODL_DIR/$ODL_NAME/bin/start"
 
-    # Link the logfile
-    LF=$DEST/logs/$ODL_KARAF_LOG_NAME
-    mkdir -p $DATA_DIR/log
-    ln -sf $LF $DATA_DIR/log/screen-karaf.log
-
     # Sleep a bit to let OpenDaylight finish starting up
     sleep $ODL_BOOT_WAIT
 }
@@ -290,9 +253,8 @@ if is_service_enabled odl-server; then
         # no-op
         :
     elif [[ "$1" == "stack" && "$2" == "install" ]]; then
-        if [[ "$OFFLINE" != "True" ]]; then
-            install_opendaylight
-        fi
+        setup_opendaylight_package
+        install_opendaylight
         configure_opendaylight
         init_opendaylight
     elif [[ "$1" == "stack" && "$2" == "post-config" ]]; then
@@ -360,6 +322,18 @@ if is_service_enabled odl-compute; then
                 other_config:provider_mappings=$ODL_PROVIDER_MAPPINGS
         fi
         sudo ovs-vsctl set Open_vSwitch $ovstbl other_config:local_ip=$ODL_LOCAL_IP
+
+        # Configure public bridge to be used by ODL_L3
+        if [ "${ODL_L3}" == "True" ]; then
+            sudo ovs-vsctl --no-wait -- --may-exist add-br $PUBLIC_BRIDGE
+            sudo ovs-vsctl --no-wait br-set-external-id $PUBLIC_BRIDGE bridge-id $PUBLIC_BRIDGE
+
+            # Add public interface to public bridge, if provided
+            if [ -n "$PUBLIC_INTERFACE" ]; then
+                sudo ovs-vsctl add-port $PUBLIC_BRIDGE $PUBLIC_INTERFACE
+                sudo ip link set $PUBLIC_INTERFACE up
+            fi
+        fi
     elif [[ "$1" == "stack" && "$2" == "post-extra" ]]; then
         # no-op
         :

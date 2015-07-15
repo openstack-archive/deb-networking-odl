@@ -21,7 +21,6 @@ from neutron.api.rpc.handlers import l3_rpc
 from neutron.common import constants as q_const
 from neutron.common import rpc as n_rpc
 from neutron.common import topics
-from neutron.db import db_base_plugin_v2
 from neutron.db import extraroute_db
 from neutron.db import l3_agentschedulers_db
 from neutron.db import l3_dvr_db
@@ -32,12 +31,21 @@ from networking_odl.common import client as odl_client
 from networking_odl.common import config  # noqa
 from networking_odl.common import utils as odl_utils
 
+try:
+    from neutron.db.db_base_plugin_v2 import common_db_mixin
+except ImportError as e:
+    # the change set ofece8cc2e9aae1610a325d0c206e38da3da9a0a1a
+    # the Change-Id of I1eac61c258541bca80e14be4b7c75519a014ffae
+    # db_base_plugin_v2.common_db_mixin was removed
+    from neutron.db import common_db_mixin
+
+
 ROUTERS = 'routers'
 FLOATINGIPS = 'floatingips'
 
 
 class OpenDaylightL3RouterPlugin(
-    db_base_plugin_v2.common_db_mixin.CommonDbMixin,
+    common_db_mixin.CommonDbMixin,
     extraroute_db.ExtraRoute_db_mixin,
     l3_dvr_db.L3_NAT_with_dvr_db_mixin,
     l3_gwmode_db.L3_NAT_db_mixin,
@@ -123,3 +131,41 @@ class OpenDaylightL3RouterPlugin(
         super(OpenDaylightL3RouterPlugin, self).update_floatingip(context, id)
         url = FLOATINGIPS + "/" + id
         self.client.sendjson('delete', url, None)
+
+    def add_router_interface(self, context, router_id, interface_info):
+        new_router = super(
+            OpenDaylightL3RouterPlugin, self).add_router_interface(
+                context, router_id, interface_info)
+        url = ROUTERS + "/" + router_id + "/add_router_interface"
+        router_dict = self._generate_router_dict(router_id, interface_info,
+                                                 new_router)
+        self.client.sendjson('put', url, router_dict)
+        return new_router
+
+    def remove_router_interface(self, context, router_id, interface_info):
+        new_router = super(
+            OpenDaylightL3RouterPlugin, self).remove_router_interface(
+                context, router_id, interface_info)
+        url = ROUTERS + "/" + router_id + "/remove_router_interface"
+        router_dict = self._generate_router_dict(router_id, interface_info,
+                                                 new_router)
+        self.client.sendjson('delete', url, router_dict)
+        return new_router
+
+    def _generate_router_dict(self, router_id, interface_info, new_router):
+        # Get network info for the subnet that is being added to the router.
+        # Check if the interface information is by port-id or subnet-id
+        add_by_port, add_by_sub = self._validate_interface_info(interface_info)
+        if add_by_sub:
+            _port_id = new_router['port_id']
+            _subnet_id = interface_info['subnet_id']
+        elif add_by_port:
+            _port_id = interface_info['port_id']
+            _subnet_id = new_router['subnet_id']
+
+        router_dict = {'subnet_id': _subnet_id,
+                       'port_id': _port_id,
+                       'id': router_id,
+                       'tenant_id': new_router['tenant_id']}
+
+        return router_dict

@@ -25,10 +25,11 @@ from neutron.extensions import portbindings
 from neutron.plugins.common import constants
 from neutron.plugins.ml2 import config as config
 from neutron.plugins.ml2 import driver_api as api
+from neutron.plugins.ml2 import driver_context as driver_context
 from neutron.plugins.ml2.drivers.opendaylight import driver
 from neutron.plugins.ml2 import plugin
 from neutron.tests import base
-from neutron.tests.unit.ml2 import test_ml2_plugin as test_plugin
+from neutron.tests.unit.plugins.ml2 import test_plugin
 from neutron.tests.unit import testlib_api
 
 HOST = 'fake-host'
@@ -101,6 +102,13 @@ class OpenDaylightMechanismTestSubnetsV2(test_plugin.TestMl2SubnetsV2,
 
 class OpenDaylightMechanismTestPortsV2(test_plugin.TestMl2PortsV2,
                                        OpenDaylightTestCase):
+
+    def setUp(self):
+        mock.patch.object(
+            mech_driver.OpenDaylightDriver,
+            'out_of_sync',
+            new_callable=mock.PropertyMock(return_value=False)).start()
+        super(OpenDaylightMechanismTestPortsV2, self).setUp()
 
     def test_update_port_mac(self):
         self.check_update_port_mac(
@@ -374,3 +382,18 @@ class OpenDaylightMechanismDriverTestCase(base.BaseTestCase):
         # Validate a network type not currently supported
         segment[api.NETWORK_TYPE] = 'mpls'
         self.assertFalse(self.mech.check_segment(segment))
+
+    def test_port_emtpy_tenant_id_work_around(self):
+        """Validate the work around code of port creation"""
+        plugin = mock.Mock()
+        plugin_context = mock.Mock()
+        network = self._get_mock_operation_context('network').current
+        port = self._get_mock_operation_context('port').current
+        tenant_id = network['tenant_id']
+        port['tenant_id'] = ''
+
+        with mock.patch.object(driver_context.db, 'get_network_segments'):
+            context = driver_context.PortContext(
+                plugin, plugin_context, port, network, {}, 0, None)
+            self.mech.odl_drv.filter_create_port_attributes(port, context)
+            self.assertEqual(tenant_id, port['tenant_id'])
