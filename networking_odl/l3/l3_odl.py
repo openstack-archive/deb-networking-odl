@@ -15,6 +15,7 @@
 #
 
 from oslo_config import cfg
+from oslo_log import log as logging
 
 from neutron.api.rpc.agentnotifiers import l3_rpc_agent_api
 from neutron.api.rpc.handlers import l3_rpc
@@ -40,6 +41,7 @@ except ImportError as e:
     from neutron.db import common_db_mixin
 
 
+LOG = logging.getLogger(__name__)
 ROUTERS = 'routers'
 FLOATINGIPS = 'floatingips'
 
@@ -108,14 +110,14 @@ class OpenDaylightL3RouterPlugin(
         return router_dict
 
     def delete_router(self, context, id):
-        super(OpenDaylightL3RouterPlugin, self).update_router(context, id)
+        super(OpenDaylightL3RouterPlugin, self).delete_router(context, id)
         url = ROUTERS + "/" + id
         self.client.sendjson('delete', url, None)
 
     def create_floatingip(self, context, floatingip,
                           initial_status=q_const.FLOATINGIP_STATUS_ACTIVE):
         fip_dict = super(OpenDaylightL3RouterPlugin, self).create_floatingip(
-            context, floatingip)
+            context, floatingip, initial_status)
         url = FLOATINGIPS
         self.client.sendjson('post', url, {FLOATINGIPS[:-1]: fip_dict})
         return fip_dict
@@ -128,7 +130,7 @@ class OpenDaylightL3RouterPlugin(
         return fip_dict
 
     def delete_floatingip(self, context, id):
-        super(OpenDaylightL3RouterPlugin, self).update_floatingip(context, id)
+        super(OpenDaylightL3RouterPlugin, self).delete_floatingip(context, id)
         url = FLOATINGIPS + "/" + id
         self.client.sendjson('delete', url, None)
 
@@ -149,7 +151,7 @@ class OpenDaylightL3RouterPlugin(
         url = ROUTERS + "/" + router_id + "/remove_router_interface"
         router_dict = self._generate_router_dict(router_id, interface_info,
                                                  new_router)
-        self.client.sendjson('delete', url, router_dict)
+        self.client.sendjson('put', url, router_dict)
         return new_router
 
     def _generate_router_dict(self, router_id, interface_info, new_router):
@@ -169,3 +171,16 @@ class OpenDaylightL3RouterPlugin(
                        'tenant_id': new_router['tenant_id']}
 
         return router_dict
+
+    dvr_deletens_if_no_port_warned = False
+
+    def dvr_deletens_if_no_port(self, context, port_id):
+        # TODO(yamahata): implement this method or delete this logging
+        # For now, this is defined to avoid attribute exception
+        # Since ODL L3 does not create namespaces, this is always going to
+        # be a noop. When it is confirmed, delete this comment and logging
+        if not self.dvr_deletens_if_no_port_warned:
+            LOG.debug('dvr is not suported yet. '
+                      'this method needs to be implemented')
+            self.dvr_deletens_if_no_port_warned = True
+        return []
