@@ -1,3 +1,11 @@
+networking-odl (1:1.0.2~git20160219.d8c9c53-0ubuntu1) UNRELEASED; urgency=medium
+
+  * New upstream snapshot from master branch, resolving compatibility with
+    neutron 8.0.0~ (LP: #1547682).
+  * d/rules: Update upstream git location.
+
+ -- James Page <james.page@ubuntu.com>  Fri, 19 Feb 2016 21:47:47 +0000
+
 networking-odl (1:1.0.1-0ubuntu1) wily; urgency=medium
 
   * New upstream release for OpenStack Liberty.
