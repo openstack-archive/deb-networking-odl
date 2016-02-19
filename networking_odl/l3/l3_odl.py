@@ -29,7 +29,6 @@ from neutron.db import l3_gwmode_db
 from neutron.plugins.common import constants
 
 from networking_odl.common import client as odl_client
-from networking_odl.common import config  # noqa
 from networking_odl.common import utils as odl_utils
 
 try:
@@ -41,6 +40,7 @@ except ImportError as e:
     from neutron.db import common_db_mixin
 
 
+cfg.CONF.import_group('ml2_odl', 'networking_odl.common.config')
 LOG = logging.getLogger(__name__)
 ROUTERS = 'routers'
 FLOATINGIPS = 'floatingips'
@@ -64,12 +64,7 @@ class OpenDaylightL3RouterPlugin(
 
     def __init__(self):
         self.setup_rpc()
-        self.client = odl_client.OpenDaylightRestClient(
-            cfg.CONF.ml2_odl.url,
-            cfg.CONF.ml2_odl.username,
-            cfg.CONF.ml2_odl.password,
-            cfg.CONF.ml2_odl.timeout
-        )
+        self.client = odl_client.OpenDaylightRestClient.create_client()
 
     def setup_rpc(self):
         self.topic = topics.L3PLUGIN
@@ -123,8 +118,16 @@ class OpenDaylightL3RouterPlugin(
         return fip_dict
 
     def update_floatingip(self, context, id, floatingip):
-        fip_dict = super(OpenDaylightL3RouterPlugin, self).update_floatingip(
-            context, id, floatingip)
+        with context.session.begin(subtransactions=True):
+            fip_dict = super(OpenDaylightL3RouterPlugin,
+                             self).update_floatingip(context, id, floatingip)
+            # Update status based on association
+            if fip_dict.get('port_id') is None:
+                fip_dict['status'] = q_const.FLOATINGIP_STATUS_DOWN
+            else:
+                fip_dict['status'] = q_const.FLOATINGIP_STATUS_ACTIVE
+            self.update_floatingip_status(context, id, fip_dict['status'])
+
         url = FLOATINGIPS + "/" + id
         self.client.sendjson('put', url, {FLOATINGIPS[:-1]: fip_dict})
         return fip_dict

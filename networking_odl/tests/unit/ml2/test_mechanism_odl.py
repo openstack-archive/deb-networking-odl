@@ -17,9 +17,12 @@ from networking_odl.common import client
 from networking_odl.common import constants as odl_const
 from networking_odl.ml2 import mech_driver
 
+import copy
 import mock
+from oslo_config import cfg
 from oslo_serialization import jsonutils
 import requests
+import testtools
 import webob.exc
 
 from neutron.common import constants as n_constants
@@ -28,11 +31,13 @@ from neutron.plugins.common import constants
 from neutron.plugins.ml2 import config as config
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2 import driver_context as driver_context
-from neutron.plugins.ml2.drivers.opendaylight import driver
 from neutron.plugins.ml2 import plugin
 from neutron.tests import base
 from neutron.tests.unit.plugins.ml2 import test_plugin
 from neutron.tests.unit import testlib_api
+
+cfg.CONF.import_group('ml2_odl', 'networking_odl.common.config')
+
 
 HOST = 'fake-host'
 PLUGIN_NAME = 'neutron.plugins.ml2.plugin.Ml2Plugin'
@@ -112,8 +117,11 @@ class OpenDaylightTestCase(test_plugin.Ml2PluginV2TestCase):
 
         super(OpenDaylightTestCase, self).setUp()
         self.port_create_status = 'DOWN'
-        self.mech = driver.OpenDaylightMechanismDriver()
-        client.OpenDaylightRestClient.sendjson = (self.check_sendjson)
+        self.mech = mech_driver.OpenDaylightMechanismDriver()
+        mock.patch.object(
+            client.OpenDaylightRestClient,
+            'sendjson',
+            new=self.check_sendjson).start()
 
     def check_sendjson(self, method, urlpath, obj):
         self.assertFalse(urlpath.startswith("http://"))
@@ -181,6 +189,13 @@ class OpenDaylightMechanismTestPortsV2(test_plugin.TestMl2PortsV2,
             expected_status=webob.exc.HTTPConflict.code,
             expected_error='PortBound')
 
+    @testtools.skip("plugin may change port status to ACTIVE on port binding")
+    def test_update_port_host_id_changed(self):
+        # TODO(yamahata): This is bug work around
+        # https://bugs.launchpad.net/neutron/+bug/1545218
+        # once the right fix goes in, remove this work around
+        pass
+
 
 class DataMatcher(object):
 
@@ -220,17 +235,17 @@ class OpenDaylightSyncTestCase(OpenDaylightTestCase):
         with mock.patch.object(client.OpenDaylightRestClient, 'sendjson',
                                side_effect=side_eff), \
             mock.patch.object(plugin.Ml2Plugin, 'get_networks',
-                              return_value=[FAKE_NETWORK]), \
+                              return_value=[FAKE_NETWORK.copy()]), \
             mock.patch.object(plugin.Ml2Plugin, 'get_network',
-                              return_value=FAKE_NETWORK), \
+                              return_value=FAKE_NETWORK.copy()), \
             mock.patch.object(plugin.Ml2Plugin, 'get_subnets',
-                              return_value=[FAKE_SUBNET]), \
+                              return_value=[FAKE_SUBNET.copy()]), \
             mock.patch.object(plugin.Ml2Plugin, 'get_ports',
-                              return_value=[FAKE_PORT]), \
+                              return_value=[FAKE_PORT.copy()]), \
             mock.patch.object(plugin.Ml2Plugin, 'get_security_groups',
-                              return_value=[FAKE_SECURITY_GROUP]), \
+                              return_value=[FAKE_SECURITY_GROUP.copy()]), \
             mock.patch.object(plugin.Ml2Plugin, 'get_security_group_rules',
-                              return_value=[FAKE_SECURITY_GROUP_RULE]):
+                              return_value=[FAKE_SECURITY_GROUP_RULE.copy()]):
             self.given_back_end.sync_full(ml2_plugin)
 
             sync_id_list = [FAKE_NETWORK['id'], FAKE_SUBNET['id'],
@@ -246,6 +261,29 @@ class OpenDaylightSyncTestCase(OpenDaylightTestCase):
                         act.append(args[2][key][0]['id'])
             self.assertEqual(act, sync_id_list)
 
+    def test_simple_sync_all_with_all_synced(self):
+        self.given_back_end.out_of_sync = True
+        ml2_plugin = plugin.Ml2Plugin()
+
+        with mock.patch.object(client.OpenDaylightRestClient, 'sendjson',
+                               return_value=None), \
+            mock.patch.object(plugin.Ml2Plugin, 'get_networks',
+                              return_value=[FAKE_NETWORK.copy()]), \
+            mock.patch.object(plugin.Ml2Plugin, 'get_subnets',
+                              return_value=[FAKE_SUBNET.copy()]), \
+            mock.patch.object(plugin.Ml2Plugin, 'get_ports',
+                              return_value=[FAKE_PORT.copy()]), \
+            mock.patch.object(plugin.Ml2Plugin, 'get_security_groups',
+                              return_value=[FAKE_SECURITY_GROUP.copy()]), \
+            mock.patch.object(plugin.Ml2Plugin, 'get_security_group_rules',
+                              return_value=[FAKE_SECURITY_GROUP_RULE.copy()]):
+            self.given_back_end.sync_full(ml2_plugin)
+
+            # it's only called for GET, there is no call for PUT
+            # 5 = network, subnet, port, security_group, security_group_rule
+            self.assertEqual(5,
+                             client.OpenDaylightRestClient.sendjson.call_count)
+
 
 class OpenDaylightMechanismDriverTestCase(base.BaseTestCase):
 
@@ -256,22 +294,22 @@ class OpenDaylightMechanismDriverTestCase(base.BaseTestCase):
         config.cfg.CONF.set_override('url', 'http://127.0.0.1:9999', 'ml2_odl')
         config.cfg.CONF.set_override('username', 'someuser', 'ml2_odl')
         config.cfg.CONF.set_override('password', 'somepass', 'ml2_odl')
-        self.mech = driver.OpenDaylightMechanismDriver()
+        self.mech = mech_driver.OpenDaylightMechanismDriver()
         self.mech.initialize()
 
     @staticmethod
     def _get_mock_network_operation_context():
-        context = mock.Mock(current=FAKE_NETWORK)
+        context = mock.Mock(current=FAKE_NETWORK.copy())
         return context
 
     @staticmethod
     def _get_mock_subnet_operation_context():
-        context = mock.Mock(current=FAKE_SUBNET)
+        context = mock.Mock(current=FAKE_SUBNET.copy())
         return context
 
     @staticmethod
     def _get_mock_port_operation_context():
-        context = mock.Mock(current=FAKE_PORT)
+        context = mock.Mock(current=FAKE_PORT.copy())
         context._plugin.get_security_group = mock.Mock(return_value={})
         return context
 
@@ -456,8 +494,29 @@ class OpenDaylightMechanismDriverTestCase(base.BaseTestCase):
                 odl_const.ODL_PORTS].filter_create_attributes(port, context)
             self.assertEqual(tenant_id, port['tenant_id'])
 
+    def test_update_port_filter(self):
+        """Validate the filter code on update port operation"""
+        items_to_filter = ['network_id', 'id', 'status', 'tenant_id']
+        plugin_context = mock.Mock()
+        network = self._get_mock_operation_context('network').current
+        subnet = self._get_mock_operation_context('subnet').current
+        port = self._get_mock_operation_context('port').current
+        port['fixed_ips'] = [{'subnet_id': subnet['id'],
+                              'ip_address': '10.0.0.10'}]
+        port['mac_address'] = port['mac_address'].upper()
+        orig_port = copy.deepcopy(port)
 
-class TestOpenDaylightDriver(base.DietTestCase):
+        with mock.patch.object(driver_context.db, 'get_network_segments'):
+            context = driver_context.PortContext(
+                plugin, plugin_context, port, network, {}, 0, None)
+            self.mech.odl_drv.FILTER_MAP[
+                odl_const.ODL_PORTS].filter_update_attributes(port, context)
+            for key, value in port.items():
+                if key not in items_to_filter:
+                    self.assertEqual(orig_port[key], value)
+
+
+class TestOpenDaylightMechanismDriver(base.DietTestCase):
 
     # given valid  and invalid segments
     valid_segment = {
@@ -472,80 +531,19 @@ class TestOpenDaylightDriver(base.DietTestCase):
         api.SEGMENTATION_ID: 'API_SEGMENTATION_ID',
         api.PHYSICAL_NETWORK: 'API_PHYSICAL_NETWORK'}
 
-    @mock.patch.object(mech_driver, 'cfg')
-    def test_get_vif_type(self, cfg):
-        given_port_context = mock.MagicMock(spec=api.PortContext)
-        given_back_end = mech_driver.OpenDaylightDriver()
-
-        # when getting VIF type
-        vif_type = given_back_end._get_vif_type(given_port_context)
-
-        # then VIF type is ovs
-        self.assertIs(vif_type, portbindings.VIF_TYPE_OVS)
-
-    def test_check_segment(self):
-        """Validate the _check_segment method."""
-
-        # given driver and all network types
-        given_back_end = mech_driver.OpenDaylightDriver()
-        all_network_types = [constants.TYPE_FLAT, constants.TYPE_GRE,
-                             constants.TYPE_LOCAL, constants.TYPE_VXLAN,
-                             constants.TYPE_VLAN, constants.TYPE_NONE]
-
-        # when checking segments network type
-        valid_types = {
-            network_type
-            for network_type in all_network_types
-            if given_back_end._check_segment({api.NETWORK_TYPE: network_type})}
-
-        # then true is returned only for valid network types
-        self.assertEqual({
-            constants.TYPE_LOCAL, constants.TYPE_GRE, constants.TYPE_VXLAN,
-            constants.TYPE_VLAN}, valid_types)
-
     def test_bind_port_front_end(self):
-        given_front_end = driver.OpenDaylightMechanismDriver()
-        if hasattr(given_front_end, 'check_segment'):
-            self.skip(
-                "Old version of driver front-end doesn't delegate bind_port to"
-                " back-end.")
-
-        given_vif_type = "MY_VIF_TYPE"
+        given_front_end = mech_driver.OpenDaylightMechanismDriver()
         given_port_context = self.given_port_context()
         given_back_end = mech_driver.OpenDaylightDriver()
-        given_back_end._get_vif_type = mock.Mock(return_value=given_vif_type)
         given_front_end.odl_drv = given_back_end
 
         # when port is bound
         given_front_end.bind_port(given_port_context)
 
-        # then vif type is got calling _get_vif_type
-        given_back_end._get_vif_type.assert_called_once_with(
-            given_port_context)
-
-        # then context binding is setup wit returned vif_type and valid
-        # segment api ID
+        # then context binding is setup with returned vif_type and valid
+        # segment API ID
         given_port_context.set_binding.assert_called_once_with(
-            self.valid_segment[api.ID], given_vif_type,
-            given_back_end.vif_details, status=n_constants.PORT_STATUS_ACTIVE)
-
-    def test_bind_port_back_end(self):
-        given_vif_type = "MY_VIF_TYPE"
-        given_port_context = self.given_port_context()
-        given_back_end = mech_driver.OpenDaylightDriver()
-        given_back_end._get_vif_type = mock.Mock(return_value=given_vif_type)
-
-        # when port is bound
-        given_back_end.bind_port(given_port_context)
-
-        # then vif type is got calling _get_vif_type
-        given_back_end._get_vif_type.assert_called_once_with(
-            given_port_context)
-
-        # then context binding is setup wit returned vif_type and valid
-        # segment api ID
-        given_port_context.set_binding.assert_called_once_with(
-            self.valid_segment[api.ID], given_vif_type,
+            self.valid_segment[api.ID], portbindings.VIF_TYPE_OVS,
             given_back_end.vif_details, status=n_constants.PORT_STATUS_ACTIVE)
 
     def given_port_context(self):

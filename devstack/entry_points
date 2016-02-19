@@ -4,11 +4,17 @@
 # cleanup_opendaylight() - Remove residual data files, anything left over
 # from previous runs that a clean run would need to clean up
 function cleanup_opendaylight {
-    # Wipe out the data and journal directories ... grumble grumble grumble
-    rm -rf $ODL_DIR/$ODL_NAME/{data,journal}
+    # Wipe out the data, journal and snapshots directories ... grumble grumble grumble
+    rm -rf $ODL_DIR/$ODL_NAME/{data,journal,snapshots}
 
     # Remove existing logfiles
-    rm -f "/opt/stack/logs/$ODL_KARAF_LOG_BASE*"
+    if [[ -n "$LOGDIR" ]]; then
+        rm -f "$LOGDIR/$ODL_KARAF_LOG_BASE*"
+    fi
+    if [[ -n "$SCREEN_LOGDIR" ]]; then
+        rm -f "$SCREEN_LOGDIR/$ODL_KARAF_LOG_BASE*"
+    fi
+    rm -f "$DEST/logs/$ODL_KARAF_LOG_BASE*"
 
     unbind_opendaylight_controller
 }
@@ -64,15 +70,26 @@ function configure_opendaylight {
     fi
 
     # Remove existing logfiles
-    rm -f "/opt/stack/logs/$ODL_KARAF_LOG_BASE*"
+    local ODL_LOGDIR=$DEST/logs
+    if [[ -n "$LOGDIR" ]]; then
+        ODL_LOGDIR=$LOGDIR
+    fi
+
+    rm -f "$ODL_LOGDIR/$ODL_KARAF_LOG_BASE*"
     # Log karaf output to a file
-    _LF=/opt/stack/logs/$ODL_KARAF_LOG_NAME
+    _LF=$ODL_LOGDIR/$ODL_KARAF_LOG_NAME
     LF=$(echo $_LF | sed 's/\//\\\//g')
     # Soft link for easy consumption
-    ln -sf $_LF "/opt/stack/logs/screen-karaf.txt"
+    sudo mkdir -p "$ODL_LOGDIR"
+    ln -sf $_LF "$ODL_LOGDIR/screen-karaf.log"
+    if [[ -n $SCREEN_LOGDIR ]]; then
+        ln -sf $_LF "$SCREEN_LOGDIR/screen-karaf.log"
+    fi
 
     # Change the karaf logfile
-    sed -i "/^log4j\.appender\.out\.file/ s/.*/log4j\.appender\.out\.file\=$LF/" \
+    # disable log rotation by setting max fiel size large enough
+    sed -i -e "/^log4j\.appender\.out\.file/ s/.*/log4j\.appender\.out\.file\=$LF/" \
+           -e "/^log4j\.appender\.out\.maxFileSize/ s/.*/log4j\.appender\.out\.maxFileSize\=1024GB/" \
     $ODL_DIR/$ODL_NAME/etc/org.ops4j.pax.logging.cfg
 
     # Configure DEBUG logs for network virtualization in odl, if the user wants it
@@ -99,8 +116,6 @@ function configure_opendaylight {
                 echo 'log4j.logger.org.opendaylight.neutron = TRACE, out' >> $ODL_LOGGING_CONFIG
             fi
         fi
-        # Bump up how man logfiles we save after rotation if debug is turned on
-        sed -i "/^log4j.appender.out.maxBackupIndex=/ s/10/$ODL_LOGFILES_TO_SAVE/" $ODL_LOGGING_CONFIG
     fi
 }
 
@@ -124,11 +139,11 @@ function init_opendaylight {
 # install_opendaylight() - Collect source and prepare
 function install_opendaylight {
     echo "Installing OpenDaylight and dependent packages"
-
-    if is_ubuntu; then
-        install_package maven openjdk-7-jre openjdk-7-jdk
-    else
-        yum_install maven java-1.7.0-openjdk
+    if [[ "$ODL_USING_EXISTING_JAVA" != "True" ]]
+    then
+        if ! setup_java "${ODL_REQUIRED_JAVA_VERSION:-7}"; then
+            exit 1
+        fi
     fi
 
     install_opendaylight_neutron_thin_ml2_driver
@@ -153,19 +168,18 @@ function install_opendaylight_neutron_thin_ml2_driver {
 
 # install_opendaylight_compute() - Make sure OVS is installed
 function install_opendaylight_compute {
-    # packages are the same as for Neutron OVS agent
-    _neutron_ovs_base_install_agent_packages
+    if [[ "$SKIP_OVS_INSTALL" = "True" ]]; then
+        echo "Skipping OVS installation."
+    else
+        # packages are the same as for Neutron OVS agent
+        _neutron_ovs_base_install_agent_packages
+    fi
 }
 
 
 # start_opendaylight() - Start running processes, including screen
 function start_opendaylight {
     echo "Starting OpenDaylight"
-    if is_ubuntu; then
-        JHOME=/usr/lib/jvm/java-1.7.0-openjdk-amd64
-    else
-        JHOME=/usr/lib/jvm/java-1.7.0-openjdk
-    fi
 
     # Wipe out the data and journal directories ... grumble grumble grumble
     rm -rf $ODL_DIR/$ODL_NAME/{data,journal}
@@ -173,7 +187,7 @@ function start_opendaylight {
     # The following variables are needed by the running karaf process.
     # See the "bin/setenv" file in the OpenDaylight distribution for
     # their individual meaning.
-    export JAVA_HOME=$JHOME
+    setup_java_env
     export JAVA_MIN_MEM=$ODL_JAVA_MIN_MEM
     export JAVA_MAX_MEM=$ODL_JAVA_MAX_MEM
     export JAVA_MAX_PERM_MEM=$ODL_JAVA_MAX_PERM_MEM
@@ -202,12 +216,26 @@ function stop_opendaylight {
 }
 
 
-# stop_opendaylight_compute() - Remove OVS bridges
-function stop_opendaylight_compute {
+# cleanup_opendaylight_compute() - Remove all OVS ports, bridges and disconnects
+# controller from switch
+function cleanup_opendaylight_compute {
+    # Remove the patch ports
+    for port in $(sudo ovs-vsctl show | grep Port | awk '{print $2}'  | cut -d '"' -f 2 | grep patch); do
+        sudo ovs-vsctl del-port ${port}
+    done
+
     # remove all OVS ports that look like Neutron created ports
     for port in $(sudo ovs-vsctl list port | grep -o -e tap[0-9a-f\-]* -e q[rg]-[0-9a-f\-]*); do
         sudo ovs-vsctl del-port ${port}
     done
+
+    # Remove all the vxlan ports
+    for port in $(sudo ovs-vsctl list port | grep name | grep vxlan | awk '{print $3}'  | cut -d '"' -f 2); do
+        sudo ovs-vsctl del-port ${port}
+    done
+
+    # Disconnect controller from switch
+    unbind_opendaylight_controller
 
     # remove all OVS bridges created by ODL
     for bridge in $(sudo ovs-vsctl list-br | grep -o -e ${OVS_BR} -e ${PUBLIC_BRIDGE}); do
@@ -221,9 +249,14 @@ function bind_opendaylight_controller {
     echo_summary "Initializing OpenDaylight"
     ODL_LOCAL_IP=${ODL_LOCAL_IP:-$HOST_IP}
     ODL_MGR_PORT=${ODL_MGR_PORT:-6640}
+    ODL_OVS_MANAGERS=${ODL_OVS_MANAGERS:-$ODL_MGR_IP}
     read ovstbl <<< $(sudo ovs-vsctl get Open_vSwitch . _uuid)
-    sudo ovs-vsctl set-manager tcp:$ODL_MGR_IP:$ODL_MGR_PORT
-    if [[ -n "$ODL_PROVIDER_MAPPINGS" ]] && [[ "$ENABLE_TENANT_VLANS" == "True" ]]; then
+    local ODL_MANAGERS_PARAM=()
+    for manager in $(echo $ODL_OVS_MANAGERS | tr "," "\n"); do
+        ODL_MANAGERS_PARAM=( "${ODL_MANAGERS_PARAM[@]}" "tcp:$manager:$ODL_MGR_PORT" )
+    done
+    sudo ovs-vsctl set-manager ${ODL_MANAGERS_PARAM[@]}
+    if [[ -n "$ODL_PROVIDER_MAPPINGS" ]]; then
         sudo ovs-vsctl set Open_vSwitch $ovstbl \
             other_config:provider_mappings=$ODL_PROVIDER_MAPPINGS
     fi
@@ -245,9 +278,14 @@ function unbind_opendaylight_controller {
 function configure_opendaylight_l3 {
     wait_for_active_bridge $PUBLIC_BRIDGE $ODL_RETRY_SLEEP_INTERVAL $ODL_BOOT_WAIT
 
-    # Add public interface to public bridge, if needed
-    if [ -n "$PUBLIC_INTERFACE" ]; then
-        echo "Adding $PUBLIC_INTERFACE to $PUBLIC_BRIDGE"
+    # Note: as of Lithium-SR3 and Beryllium releases, ODL will add the OVS port(s)
+    #       to the external bridge via the ODL_PROVIDER_MAPPINGS method. Being so,
+    #       the usage of PUBLIC_INTERFACE is no longer necessary in ODL devstack.
+
+    # DEPRECATED: Add public interface to public bridge, if needed
+    if [[ -n "$PUBLIC_INTERFACE" && "$PUBLIC_INTERFACE" != "br100" ]]; then
+        deprecated "Adding $PUBLIC_INTERFACE to $PUBLIC_BRIDGE."
+        deprecated "Use ODL_PROVIDER_MAPPINGS instead of PUBLIC_INTERFACE."
         sudo ovs-vsctl --no-wait -- --may-exist add-port $PUBLIC_BRIDGE $PUBLIC_INTERFACE
         sudo ip link set $PUBLIC_INTERFACE up
     fi

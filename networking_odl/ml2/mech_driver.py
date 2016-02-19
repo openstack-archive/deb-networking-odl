@@ -14,20 +14,21 @@
 #    under the License.
 
 import abc
+import copy
 import six
 
+import netaddr
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 import requests
 
-from neutron.common import constants as n_const
 from neutron.common import exceptions as n_exc
 from neutron.common import utils
 from neutron import context as neutron_context
+from neutron.extensions import allowedaddresspairs as addr_pair
 from neutron.extensions import portbindings
 from neutron.extensions import securitygroup as sg
-from neutron.plugins.common import constants
 from neutron.plugins.ml2 import driver_api
 from neutron.plugins.ml2 import driver_context
 
@@ -35,8 +36,11 @@ from networking_odl.common import callback as odl_call
 from networking_odl.common import client as odl_client
 from networking_odl.common import constants as odl_const
 from networking_odl.common import utils as odl_utils
+from networking_odl.ml2 import network_topology
 from networking_odl.openstack.common._i18n import _LE
 
+
+cfg.CONF.import_group('ml2_odl', 'networking_odl.common.config')
 LOG = logging.getLogger(__name__)
 
 not_found_exception_map = {odl_const.ODL_NETWORKS: n_exc.NetworkNotFound,
@@ -111,13 +115,27 @@ class PortFilter(ResourceFilterBase):
                   for sg in port['security_groups']]
         port['security_groups'] = groups
 
+    @staticmethod
+    def _fixup_mac_address(port):
+        # TODO(kmestery): Converting to uppercase due to ODL bug
+        # https://bugs.opendaylight.org/show_bug.cgi?id=477
+        port['mac_address'] = port['mac_address'].upper()
+
+    @classmethod
+    def _fixup_allowed_ipaddress_pairs(cls, allowed_address_pairs):
+        """unify (ip address or network address) into network address"""
+        for address_pair in allowed_address_pairs:
+            ip_address = address_pair['ip_address']
+            network_address = str(netaddr.IPNetwork(ip_address))
+            address_pair['ip_address'] = network_address
+            cls._fixup_mac_address(address_pair)
+
     @classmethod
     def filter_create_attributes(cls, port, context):
         """Filter out port attributes not required for a create."""
         cls._add_security_groups(port, context)
-        # TODO(kmestery): Converting to uppercase due to ODL bug
-        # https://bugs.opendaylight.org/show_bug.cgi?id=477
-        port['mac_address'] = port['mac_address'].upper()
+        cls._fixup_mac_address(port)
+        cls._fixup_allowed_ipaddress_pairs(port[addr_pair.ADDRESS_PAIRS])
         odl_utils.try_del(port, ['status'])
 
         # NOTE(yamahata): work around for port creation for router
@@ -138,8 +156,9 @@ class PortFilter(ResourceFilterBase):
     def filter_update_attributes(cls, port, context):
         """Filter out port attributes for an update operation."""
         cls._add_security_groups(port, context)
-        odl_utils.try_del(port, ['network_id', 'id', 'status', 'mac_address',
-                          'tenant_id', 'fixed_ips'])
+        cls._fixup_mac_address(port)
+        cls._fixup_allowed_ipaddress_pairs(port[addr_pair.ADDRESS_PAIRS])
+        odl_utils.try_del(port, ['network_id', 'id', 'status', 'tenant_id'])
 
     @classmethod
     def filter_create_attributes_with_plugin(cls, port, plugin, dbcontext):
@@ -201,14 +220,11 @@ class OpenDaylightDriver(object):
 
     def __init__(self):
         LOG.debug("Initializing OpenDaylight ML2 driver")
-        self.client = odl_client.OpenDaylightRestClient(
-            cfg.CONF.ml2_odl.url,
-            cfg.CONF.ml2_odl.username,
-            cfg.CONF.ml2_odl.password,
-            cfg.CONF.ml2_odl.timeout
-        )
+        self.client = odl_client.OpenDaylightRestClient.create_client()
         self.sec_handler = odl_call.OdlSecurityGroupsHandler(self)
         self.vif_details = {portbindings.CAP_PORT_FILTER: True}
+        self._network_topology = network_topology.NetworkTopologyManager(
+            vif_details=self.vif_details)
 
     def synchronize(self, operation, object_type, context):
         """Synchronize ODL with Neutron following a configuration change."""
@@ -249,11 +265,13 @@ class OpenDaylightDriver(object):
                 # If they don't match, update it below
                 pass
 
-        key = collection_name[:-1] if len(to_be_synced) == 1 else (
-            collection_name)
-        # Convert underscores to dashes in the URL for ODL
-        collection_name_url = collection_name.replace('_', '-')
-        self.client.sendjson('post', collection_name_url, {key: to_be_synced})
+        if to_be_synced:
+            key = collection_name[:-1] if len(to_be_synced) == 1 else (
+                collection_name)
+            # Convert underscores to dashes in the URL for ODL
+            collection_name_url = collection_name.replace('_', '-')
+            self.client.sendjson('post', collection_name_url,
+                                 {key: to_be_synced})
 
         # https://bugs.launchpad.net/networking-odl/+bug/1371115
         # TODO(yamahata): update resources with unsyned attributes
@@ -302,7 +320,7 @@ class OpenDaylightDriver(object):
                     urlpath = object_type_url + '/' + obj_id
                     method = 'put'
                     attr_filter = filter_cls.filter_update_attributes
-                resource = context.current.copy()
+                resource = copy.deepcopy(context.current)
                 attr_filter(resource, context)
                 self.client.sendjson(method, urlpath,
                                      {object_type_url[:-1]: resource})
@@ -340,45 +358,61 @@ class OpenDaylightDriver(object):
                 self.out_of_sync = True
 
     def bind_port(self, port_context):
-        """Set binding for all valid segments
+        """Set binding for a valid segments
 
         """
+        self._network_topology.bind_port(port_context)
 
-        valid_segment = None
-        for segment in port_context.segments_to_bind:
-            if self._check_segment(segment):
-                valid_segment = segment
-                break
 
-        if valid_segment:
-            vif_type = self._get_vif_type(port_context)
-            LOG.debug("Bind port %(port)s on network %(network)s with valid "
-                      "segment %(segment)s and VIF type %(vif_type)r.",
-                      {'port': port_context.current['id'],
-                       'network': port_context.network.current['id'],
-                       'segment': valid_segment, 'vif_type': vif_type})
+class OpenDaylightMechanismDriver(driver_api.MechanismDriver):
 
-            port_context.set_binding(
-                segment[driver_api.ID], vif_type,
-                self.vif_details,
-                status=n_const.PORT_STATUS_ACTIVE)
+    """Mechanism Driver for OpenDaylight.
 
-    def _check_segment(self, segment):
-        """Verify a segment is valid for the OpenDaylight MechanismDriver.
+    This driver was a port from the NCS MechanismDriver.  The API
+    exposed by ODL is slightly different from the API exposed by NCS,
+    but the general concepts are the same.
+    """
 
-        Verify the requested segment is supported by ODL and return True or
-        False to indicate this to callers.
-        """
+    def initialize(self):
+        self.url = cfg.CONF.ml2_odl.url
+        self.timeout = cfg.CONF.ml2_odl.timeout
+        self.username = cfg.CONF.ml2_odl.username
+        self.password = cfg.CONF.ml2_odl.password
+        required_opts = ('url', 'username', 'password')
+        for opt in required_opts:
+            if not getattr(self, opt):
+                raise cfg.RequiredOptError(opt, 'ml2_odl')
 
-        network_type = segment[driver_api.NETWORK_TYPE]
-        return network_type in [constants.TYPE_LOCAL, constants.TYPE_GRE,
-                                constants.TYPE_VXLAN, constants.TYPE_VLAN]
+        self.odl_drv = OpenDaylightDriver()
 
-    def _get_vif_type(self, port_context):
-        """Get VIF type string for given PortContext
+    # Postcommit hooks are used to trigger synchronization.
 
-        Dummy implementation: it always returns following constant.
-        neutron.extensions.portbindings.VIF_TYPE_OVS
-        """
+    def create_network_postcommit(self, context):
+        self.odl_drv.synchronize('create', odl_const.ODL_NETWORKS, context)
 
-        return portbindings.VIF_TYPE_OVS
+    def update_network_postcommit(self, context):
+        self.odl_drv.synchronize('update', odl_const.ODL_NETWORKS, context)
+
+    def delete_network_postcommit(self, context):
+        self.odl_drv.synchronize('delete', odl_const.ODL_NETWORKS, context)
+
+    def create_subnet_postcommit(self, context):
+        self.odl_drv.synchronize('create', odl_const.ODL_SUBNETS, context)
+
+    def update_subnet_postcommit(self, context):
+        self.odl_drv.synchronize('update', odl_const.ODL_SUBNETS, context)
+
+    def delete_subnet_postcommit(self, context):
+        self.odl_drv.synchronize('delete', odl_const.ODL_SUBNETS, context)
+
+    def create_port_postcommit(self, context):
+        self.odl_drv.synchronize('create', odl_const.ODL_PORTS, context)
+
+    def update_port_postcommit(self, context):
+        self.odl_drv.synchronize('update', odl_const.ODL_PORTS, context)
+
+    def delete_port_postcommit(self, context):
+        self.odl_drv.synchronize('delete', odl_const.ODL_PORTS, context)
+
+    def bind_port(self, context):
+        self.odl_drv.bind_port(context)

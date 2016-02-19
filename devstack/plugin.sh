@@ -4,7 +4,7 @@
 # Functions to control the configuration and operation of the opendaylight service
 
 # Save trace setting
-XTRACE=$(set +o | grep xtrace)
+_XTRACE_NETWORKING_ODL=$(set +o | grep xtrace)
 set +o xtrace
 
 # OpenDaylight directories
@@ -25,10 +25,21 @@ source $TOP_DIR/lib/neutron_plugins/ovs_base
 source $NETWORKING_ODL_DIR/devstack/settings.odl
 source $NETWORKING_ODL_DIR/devstack/odl-releases/$ODL_RELEASE
 
+# Utilities functions for setting up Java
+source $NETWORKING_ODL_DIR/devstack/setup_java.sh
+
 # Import Entry Points
 # -------------------
 source $NETWORKING_ODL_DIR/devstack/entry_points
 
+# Restore xtrace
+$_XTRACE_NETWORKING_ODL
+
+if [[ "$ODL_USING_EXISTING_JAVA" == "True" ]]
+then
+    echo 'Using installed java.'
+    java -version || exit 1
+fi
 
 # main loop
 if is_service_enabled odl-server; then
@@ -78,8 +89,7 @@ if is_service_enabled odl-compute; then
     fi
 
     if [[ "$1" == "unstack" ]]; then
-        unbind_opendaylight_controller
-        stop_opendaylight_compute
+        cleanup_opendaylight_compute
     fi
 
     if [[ "$1" == "clean" ]]; then
@@ -108,9 +118,6 @@ if is_service_enabled odl-neutron; then
         :
     fi
 fi
-
-# Restore xtrace
-$XTRACE
 
 # Tell emacs to use shell-script-mode
 ## Local variables:

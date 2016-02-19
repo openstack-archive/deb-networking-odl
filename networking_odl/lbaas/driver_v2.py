@@ -21,9 +21,9 @@ from oslo_log import log as logging
 from neutron_lbaas.drivers import driver_base
 
 from networking_odl.common import client as odl_client
-from networking_odl.common import config  # noqa
 from networking_odl.common import constants as odl_const
 
+cfg.CONF.import_group('ml2_odl', 'networking_odl.common.config')
 LOG = logging.getLogger(__name__)
 
 LBAAS = "lbaas"
@@ -35,12 +35,7 @@ class OpenDaylightLbaasDriverV2(driver_base.LoadBalancerBaseDriver):
     def __init__(self, plugin):
         LOG.debug("Initializing OpenDaylight LBaaS driver")
         self.plugin = plugin
-        self.client = odl_client.OpenDaylightRestClient(
-            cfg.CONF.ml2_odl.url,
-            cfg.CONF.ml2_odl.username,
-            cfg.CONF.ml2_odl.password,
-            cfg.CONF.ml2_odl.timeout
-        )
+        self.client = odl_client.OpenDaylightRestClient.create_client()
         self._loadbalancer = ODLLoadBalancerManager(self.client)
         self._listener = ODLListenerManager(self.client)
         self._pool = ODLPoolManager(self.client)
