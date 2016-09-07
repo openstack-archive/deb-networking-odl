@@ -1,0 +1,11 @@
+Code-Review+1: Mike Kolesnik <mkolesni@redhat.com>
+Code-Review+1: vikram.choudhary <vikram.choudhary@huawei.com>
+Code-Review+1: Li Jingjing <li.jingjing3@zte.com.cn>
+Code-Review+2: Isaku Yamahata <isaku.yamahata@gmail.com>
+Workflow+1: Isaku Yamahata <isaku.yamahata@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 21 Jun 2016 22:26:59 +0000
+Reviewed-on: https://review.openstack.org/331367
+Project: openstack/deb-networking-odl
+Branch: refs/heads/master
