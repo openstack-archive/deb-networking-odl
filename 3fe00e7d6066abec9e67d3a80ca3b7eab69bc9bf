@@ -1,0 +1,12 @@
+Code-Review+2: Armando Migliaccio <armamig@gmail.com>
+Code-Review+1: Isaku Yamahata <isaku.yamahata@gmail.com>
+Code-Review+1: Flavio Fernandes <flavio@flaviof.com>
+Code-Review+1: gongysh <gong.yongsheng@99cloud.net>
+Code-Review+2: Kyle Mestery <mestery@mestery.com>
+Workflow+1: Kyle Mestery <mestery@mestery.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 29 Dec 2015 22:19:08 +0000
+Reviewed-on: https://review.openstack.org/253738
+Project: openstack/deb-networking-odl
+Branch: refs/heads/stable/liberty
