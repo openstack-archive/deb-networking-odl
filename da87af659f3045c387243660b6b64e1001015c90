@@ -1,0 +1,9 @@
+Code-Review+1: Alon Kochba <alonko@hpe.com>
+Code-Review+2: Isaku Yamahata <isaku.yamahata@gmail.com>
+Workflow+1: Isaku Yamahata <isaku.yamahata@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 01 Nov 2016 17:08:28 +0000
+Reviewed-on: https://review.openstack.org/391276
+Project: openstack/deb-networking-odl
+Branch: refs/heads/master
