@@ -1,0 +1,10 @@
+Code-Review+2: Armando Migliaccio <armamig@gmail.com>
+Code-Review+1: Manjeet Singh Bhatia <manjeet.s.bhatia@intel.com>
+Code-Review+2: Ihar Hrachyshka <ihrachys@redhat.com>
+Workflow+1: Ihar Hrachyshka <ihrachys@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 04 Nov 2016 18:32:22 +0000
+Reviewed-on: https://review.openstack.org/393554
+Project: openstack/deb-networking-odl
+Branch: refs/heads/master
