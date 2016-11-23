@@ -1,3 +1,11 @@
+networking-odl (1:1.0.2~git20160219.d8c9c53-0ubuntu2) UNRELEASED; urgency=medium
+
+  * d/s/options: extend-diff-ignore of .gitreview
+  * d/control: Using OpenStack's Gerrit as VCS URLs.
+  * Bumped debhelper compat version to 10
+
+ -- Ondřej Nový <onovy@debian.org>  Thu, 24 Nov 2016 00:01:37 +0100
+
 networking-odl (1:1.0.2~git20160219.d8c9c53-0ubuntu1) xenial; urgency=medium
 
   * New upstream snapshot from master branch, resolving compatibility with
