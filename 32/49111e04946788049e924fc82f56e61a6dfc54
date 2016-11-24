@@ -1,0 +1,10 @@
+Code-Review+2: Isaku Yamahata <isaku.yamahata@gmail.com>
+Code-Review+2: Mike Kolesnik <mkolesni@redhat.com>
+Code-Review+2: Ihar Hrachyshka <ihrachys@redhat.com>
+Workflow+1: Ihar Hrachyshka <ihrachys@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 24 Nov 2016 04:01:08 +0000
+Reviewed-on: https://review.openstack.org/398041
+Project: openstack/deb-networking-odl
+Branch: refs/heads/master
