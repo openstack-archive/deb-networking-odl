@@ -1,0 +1,9 @@
+Code-Review+2: Kevin Benton <kevin@benton.pub>
+Code-Review+2: Ihar Hrachyshka <ihrachys@redhat.com>
+Workflow+1: Ihar Hrachyshka <ihrachys@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Fri, 25 Nov 2016 13:13:23 +0000
+Reviewed-on: https://review.openstack.org/311465
+Project: openstack/deb-networking-odl
+Branch: refs/heads/stable/liberty
