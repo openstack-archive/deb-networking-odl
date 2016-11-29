@@ -1,0 +1,10 @@
+Code-Review+2: Ihar Hrachyshka <ihrachys@redhat.com>
+Code-Review+1: Isaku Yamahata <isaku.yamahata@gmail.com>
+Code-Review+1: Henry Gessau <HenryG@gessau.net>
+Workflow+1: Ihar Hrachyshka <ihrachys@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sun, 27 Nov 2016 12:40:35 +0000
+Reviewed-on: https://review.openstack.org/400548
+Project: openstack/deb-networking-odl
+Branch: refs/heads/stable/newton
