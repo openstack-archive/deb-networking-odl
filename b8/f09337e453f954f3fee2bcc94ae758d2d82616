@@ -1,0 +1,8 @@
+Code-Review+2: Isaku Yamahata <isaku.yamahata@gmail.com>
+Workflow+1: Isaku Yamahata <isaku.yamahata@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sat, 10 Dec 2016 07:12:51 +0000
+Reviewed-on: https://review.openstack.org/409406
+Project: openstack/deb-networking-odl
+Branch: refs/heads/master
