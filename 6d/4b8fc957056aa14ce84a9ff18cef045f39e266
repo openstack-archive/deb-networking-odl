@@ -1,0 +1,8 @@
+Code-Review+2: Mike Kolesnik <mkolesni@redhat.com>
+Workflow+1: Mike Kolesnik <mkolesni@redhat.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 13 Jun 2017 12:49:06 +0000
+Reviewed-on: https://review.openstack.org/473697
+Project: openstack/deb-networking-odl
+Branch: refs/heads/master
