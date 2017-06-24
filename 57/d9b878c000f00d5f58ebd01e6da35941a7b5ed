@@ -1,0 +1,11 @@
+Code-Review+2: Brian Haley <haleyb.dev@gmail.com>
+Code-Review+1: Isaku Yamahata <isaku.yamahata@gmail.com>
+Code-Review+1: Tim Rozet <trozet@redhat.com>
+Code-Review+2: Kevin Benton <kevin@benton.pub>
+Workflow+1: Kevin Benton <kevin@benton.pub>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Sat, 24 Jun 2017 01:08:09 +0000
+Reviewed-on: https://review.openstack.org/476947
+Project: openstack/deb-networking-odl
+Branch: refs/heads/stable/newton
